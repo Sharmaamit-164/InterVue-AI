@@ -57,12 +57,16 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // All other APIs require JWT authentication
+                        // User APIs require authentication
+                        .requestMatchers(
+                                "/api/users/**"
+                        ).authenticated()
+
+                        // All remaining APIs require authentication
                         .anyRequest().authenticated()
                 )
 
-                // Run JwtFilter before Spring Security's
-                // UsernamePasswordAuthenticationFilter
+                // Run JWT filter before Spring Security authentication filter
                 .addFilterBefore(
                         jwtFilter,
                         UsernamePasswordAuthenticationFilter.class
