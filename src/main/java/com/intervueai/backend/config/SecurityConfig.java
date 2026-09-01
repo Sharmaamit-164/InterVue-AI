@@ -32,41 +32,42 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
-                // Disable CSRF because we are using JWT
                 .csrf(csrf -> csrf.disable())
 
-                // JWT authentication is stateless
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS
                         )
                 )
 
-                // API authorization
                 .authorizeHttpRequests(auth -> auth
 
-                        // Authentication APIs are public
+                        // Auth
                         .requestMatchers(
                                 "/api/auth/**"
                         ).permitAll()
 
-                        // Swagger APIs are public
+                        // Swagger
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // User APIs require authentication
+                        // Resume APIs
+                        .requestMatchers(
+                                "/api/resumes/**"
+                        ).authenticated()
+
+                        // User APIs
                         .requestMatchers(
                                 "/api/users/**"
                         ).authenticated()
 
-                        // All remaining APIs require authentication
+                        // Everything else
                         .anyRequest().authenticated()
                 )
 
-                // Run JWT filter before Spring Security authentication filter
                 .addFilterBefore(
                         jwtFilter,
                         UsernamePasswordAuthenticationFilter.class

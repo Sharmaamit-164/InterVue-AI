@@ -3,7 +3,8 @@ package com.intervueai.backend.resume.controller;
 import com.intervueai.backend.resume.dto.ResumeResponse;
 import com.intervueai.backend.resume.dto.ResumeUploadResponse;
 import com.intervueai.backend.resume.service.ResumeService;
-import org.springframework.http.HttpHeaders;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -14,6 +15,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/resumes")
+@SecurityRequirement(name = "bearerAuth")
 public class ResumeController {
 
     private final ResumeService resumeService;
@@ -22,7 +24,14 @@ public class ResumeController {
         this.resumeService = resumeService;
     }
 
-    // Upload resume
+    // =========================
+    // Upload Resume
+    // =========================
+
+    @Operation(
+            summary = "Upload Resume",
+            description = "Upload a PDF resume for the logged-in user"
+    )
     @PostMapping(
             value = "/upload",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
@@ -40,7 +49,14 @@ public class ResumeController {
         return ResponseEntity.ok(response);
     }
 
-    // Get all resumes of logged-in user
+    // =========================
+    // Get My Resumes
+    // =========================
+
+    @Operation(
+            summary = "Get My Resumes",
+            description = "Get all resumes uploaded by the logged-in user"
+    )
     @GetMapping
     public ResponseEntity<List<ResumeResponse>> getMyResumes(
             Authentication authentication
@@ -48,13 +64,19 @@ public class ResumeController {
 
         String email = authentication.getName();
 
-        List<ResumeResponse> resumes =
-                resumeService.getMyResumes(email);
-
-        return ResponseEntity.ok(resumes);
+        return ResponseEntity.ok(
+                resumeService.getMyResumes(email)
+        );
     }
 
-    // Get a particular resume of logged-in user
+    // =========================
+    // Get Single Resume
+    // =========================
+
+    @Operation(
+            summary = "Get My Resume",
+            description = "Get a specific resume belonging to the logged-in user"
+    )
     @GetMapping("/{resumeId}")
     public ResponseEntity<ResumeResponse> getMyResume(
             @PathVariable Long resumeId,
@@ -63,15 +85,21 @@ public class ResumeController {
 
         String email = authentication.getName();
 
-        ResumeResponse response =
-                resumeService.getMyResume(email, resumeId);
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                resumeService.getMyResume(email, resumeId)
+        );
     }
 
-    // Delete a resume
+    // =========================
+    // Delete Resume
+    // =========================
+
+    @Operation(
+            summary = "Delete My Resume",
+            description = "Delete a resume belonging to the logged-in user"
+    )
     @DeleteMapping("/{resumeId}")
-    public ResponseEntity<String> deleteMyResume(
+    public ResponseEntity<Void> deleteMyResume(
             @PathVariable Long resumeId,
             Authentication authentication
     ) {
@@ -80,8 +108,6 @@ public class ResumeController {
 
         resumeService.deleteMyResume(email, resumeId);
 
-        return ResponseEntity.ok(
-                "Resume deleted successfully"
-        );
+        return ResponseEntity.noContent().build();
     }
 }

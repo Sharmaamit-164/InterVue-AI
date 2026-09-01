@@ -35,54 +35,90 @@ public class JwtFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        String authorizationHeader =
-                request.getHeader("Authorization");
+        String authorizationHeader = request.getHeader("Authorization");
 
-        String token = null;
+        System.out.println("======================================");
+        System.out.println("JWT FILTER");
+        System.out.println("Request: " + request.getMethod()
+                + " " + request.getRequestURI());
+        System.out.println("Authorization Header Present: "
+                + (authorizationHeader != null));
+
         String email = null;
+        String token = null;
 
-        // Check Authorization header
         if (authorizationHeader != null
                 && authorizationHeader.startsWith("Bearer ")) {
 
             token = authorizationHeader.substring(7);
 
             try {
+
                 email = jwtUtil.extractEmail(token);
+
+                System.out.println("JWT Email: " + email);
+
+                if (jwtUtil.isTokenValid(token)) {
+
+                    UserDetails userDetails =
+                            userDetailsService.loadUserByUsername(email);
+
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities()
+                            );
+
+                    authentication.setDetails(
+                            new WebAuthenticationDetailsSource()
+                                    .buildDetails(request)
+                    );
+
+                    SecurityContextHolder
+                            .getContext()
+                            .setAuthentication(authentication);
+
+                    System.out.println(
+                            "JWT AUTHENTICATION SUCCESS"
+                    );
+
+                    System.out.println(
+                            "Authorities: "
+                                    + userDetails.getAuthorities()
+                    );
+
+                } else {
+
+                    System.out.println(
+                            "JWT TOKEN INVALID"
+                    );
+                }
+
             } catch (Exception e) {
-                // Invalid token
-                email = null;
-            }
-        }
 
-        // Authenticate user if token is valid
-        if (email != null
-                && SecurityContextHolder
-                .getContext()
-                .getAuthentication() == null) {
-
-            UserDetails userDetails =
-                    userDetailsService.loadUserByUsername(email);
-
-            if (jwtUtil.isTokenValid(token)) {
-
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities()
-                        );
-
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource()
-                                .buildDetails(request)
+                System.out.println(
+                        "JWT ERROR: " + e.getMessage()
                 );
 
-                SecurityContextHolder
-                        .getContext()
-                        .setAuthentication(authentication);
+                e.printStackTrace();
             }
+
+        } else {
+
+            System.out.println(
+                    "NO BEARER TOKEN FOUND"
+            );
         }
+
+        System.out.println(
+                "Authenticated: "
+                        + (SecurityContextHolder
+                        .getContext()
+                        .getAuthentication() != null)
+        );
+
+        System.out.println("======================================");
 
         filterChain.doFilter(request, response);
     }

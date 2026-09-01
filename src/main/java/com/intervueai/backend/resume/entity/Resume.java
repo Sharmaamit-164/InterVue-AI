@@ -1,7 +1,17 @@
 package com.intervueai.backend.resume.entity;
 
 import com.intervueai.backend.user.entity.User;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -22,20 +32,20 @@ public class Resume {
     @Column(nullable = false)
     private String fileName;
 
-    // File type, for example: application/pdf
+    // File type
     @Column(nullable = false)
     private String fileType;
 
-    // Actual PDF file stored in PostgreSQL
-    @Lob
-    @Column(nullable = false)
+    // Actual PDF file stored in PostgreSQL BYTEA
+    @JdbcTypeCode(SqlTypes.VARBINARY)
+    @Column(name = "file_data", columnDefinition = "BYTEA")
     private byte[] fileData;
 
-    // Text extracted from the resume PDF
+    // Text extracted from PDF
     @Column(columnDefinition = "TEXT")
     private String parsedText;
 
-    // Date and time when the resume was uploaded
+    // Upload date and time
     @Column(nullable = false)
     private LocalDateTime uploadedAt;
 
@@ -43,7 +53,6 @@ public class Resume {
     public Resume() {
     }
 
-    // Constructor
     public Resume(
             User user,
             String fileName,

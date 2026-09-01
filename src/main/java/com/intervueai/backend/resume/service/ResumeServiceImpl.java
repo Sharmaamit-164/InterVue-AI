@@ -11,6 +11,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,6 +33,10 @@ public class ResumeServiceImpl implements ResumeService {
         this.pdfResumeParser = pdfResumeParser;
     }
 
+    // =========================================================
+    // UPLOAD RESUME
+    // =========================================================
+
     @Override
     @Transactional
     public ResumeUploadResponse uploadResume(
@@ -39,20 +44,25 @@ public class ResumeServiceImpl implements ResumeService {
             MultipartFile file
     ) {
 
-        // Find logged-in user
+        // 1. Find logged-in user
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new RuntimeException("User not found")
+                );
 
-        // Validate file
+        // 2. Check file
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException(
                     "Resume file cannot be empty"
             );
         }
 
-        // Validate PDF
-        if (!"application/pdf".equalsIgnoreCase(file.getContentType())) {
+        // 3. Check PDF
+        if (file.getContentType() == null ||
+                !"application/pdf".equalsIgnoreCase(
+                        file.getContentType()
+                )) {
+
             throw new IllegalArgumentException(
                     "Only PDF files are allowed"
             );
@@ -60,28 +70,42 @@ public class ResumeServiceImpl implements ResumeService {
 
         try {
 
-            // Read actual PDF file
+            // 4. Read complete PDF into byte array
             byte[] fileData = file.getBytes();
 
-            // Extract text from PDF
-            String parsedText =
-                    pdfResumeParser.parse(file.getInputStream());
+            // 5. Parse PDF text
+            String parsedText = pdfResumeParser.parse(
+                    new ByteArrayInputStream(fileData)
+            );
 
-            // Create Resume entity
+            // 6. Create Resume entity
             Resume resume = new Resume();
 
             resume.setUser(user);
-            resume.setFileName(file.getOriginalFilename());
-            resume.setFileType(file.getContentType());
-            resume.setFileData(fileData);
-            resume.setParsedText(parsedText);
-            resume.setUploadedAt(LocalDateTime.now());
 
-            // Save PDF + metadata + parsed text
+            resume.setFileName(
+                    file.getOriginalFilename()
+            );
+
+            resume.setFileType(
+                    file.getContentType()
+            );
+
+            // Store actual PDF inside PostgreSQL
+            resume.setFileData(fileData);
+
+            // Store extracted resume text
+            resume.setParsedText(parsedText);
+
+            resume.setUploadedAt(
+                    LocalDateTime.now()
+            );
+
+            // 7. Save everything to PostgreSQL
             Resume savedResume =
                     resumeRepository.save(resume);
 
-            // Return response
+            // 8. Return response
             return new ResumeUploadResponse(
                     savedResume.getId(),
                     savedResume.getFileName(),
@@ -92,44 +116,65 @@ public class ResumeServiceImpl implements ResumeService {
         } catch (IOException e) {
 
             throw new RuntimeException(
-                    "Failed to read resume file",
+                    "Failed to read or parse resume file",
                     e
             );
         }
     }
 
+    // =========================================================
+    // GET ALL MY RESUMES
+    // =========================================================
+
     @Override
+    @Transactional
     public List<ResumeResponse> getMyResumes(
             String email
     ) {
 
+        // Find logged-in user
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new RuntimeException("User not found")
+                );
 
+        // Get only this user's resumes
         return resumeRepository.findByUser(user)
                 .stream()
                 .map(this::convertToResponse)
                 .toList();
     }
 
+    // =========================================================
+    // GET ONE RESUME
+    // =========================================================
+
     @Override
+    @Transactional
     public ResumeResponse getMyResume(
             String email,
             Long resumeId
     ) {
 
+        // Find logged-in user
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new RuntimeException("User not found")
+                );
 
+        // Find resume belonging to this user
         Resume resume = resumeRepository
                 .findByIdAndUser(resumeId, user)
                 .orElseThrow(() ->
-                        new RuntimeException("Resume not found"));
+                        new RuntimeException("Resume not found")
+                );
 
         return convertToResponse(resume);
     }
+
+    // =========================================================
+    // DELETE RESUME
+    // =========================================================
 
     @Override
     @Transactional
@@ -138,17 +183,26 @@ public class ResumeServiceImpl implements ResumeService {
             Long resumeId
     ) {
 
+        // Find logged-in user
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new RuntimeException("User not found")
+                );
 
+        // Find resume belonging to this user
         Resume resume = resumeRepository
                 .findByIdAndUser(resumeId, user)
                 .orElseThrow(() ->
-                        new RuntimeException("Resume not found"));
+                        new RuntimeException("Resume not found")
+                );
 
+        // Delete resume
         resumeRepository.delete(resume);
     }
+
+    // =========================================================
+    // CONVERT ENTITY -> RESPONSE
+    // =========================================================
 
     private ResumeResponse convertToResponse(
             Resume resume
