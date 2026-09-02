@@ -32,42 +32,72 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
+
+                // =========================
+                // CSRF
+                // =========================
                 .csrf(csrf -> csrf.disable())
 
+                // =========================
+                // JWT - Stateless
+                // =========================
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS
                         )
                 )
 
+                // =========================
+                // Authorization
+                // =========================
                 .authorizeHttpRequests(auth -> auth
 
-                        // Auth
+                        // -------------------------
+                        // Authentication APIs
+                        // -------------------------
                         .requestMatchers(
                                 "/api/auth/**"
                         ).permitAll()
 
-                        // Swagger
+                        // -------------------------
+                        // Swagger / OpenAPI
+                        // -------------------------
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
                         ).permitAll()
 
+                        // -------------------------
                         // Resume APIs
+                        // -------------------------
                         .requestMatchers(
                                 "/api/resumes/**"
                         ).authenticated()
 
+                        // -------------------------
+                        // Job APIs
+                        // -------------------------
+                        .requestMatchers(
+                                "/api/jobs/**"
+                        ).authenticated()
+
+                        // -------------------------
                         // User APIs
+                        // -------------------------
                         .requestMatchers(
                                 "/api/users/**"
                         ).authenticated()
 
+                        // -------------------------
                         // Everything else
+                        // -------------------------
                         .anyRequest().authenticated()
                 )
 
+                // =========================
+                // JWT Filter
+                // =========================
                 .addFilterBefore(
                         jwtFilter,
                         UsernamePasswordAuthenticationFilter.class
