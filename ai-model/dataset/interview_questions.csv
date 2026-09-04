@@ -1,0 +1,51 @@
+question,category,difficulty
+What is the difference between JDK and JRE?,Java,Easy
+What is JVM?,Java,Easy
+What are the OOP principles in Java?,Java,Easy
+What is inheritance in Java?,Java,Easy
+What is polymorphism in Java?,Java,Medium
+What is abstraction in Java?,Java,Medium
+What is encapsulation in Java?,Java,Easy
+What is method overloading?,Java,Easy
+What is method overriding?,Java,Easy
+What is the difference between ArrayList and LinkedList?,Java,Medium
+What is Spring Boot?,Spring Boot,Easy
+What is dependency injection in Spring?,Spring Boot,Medium
+What is Spring IoC container?,Spring Boot,Medium
+What is Spring Boot auto configuration?,Spring Boot,Medium
+What is @RestController in Spring Boot?,Spring Boot,Easy
+What is @Service annotation?,Spring Boot,Easy
+What is @Repository annotation?,Spring Boot,Easy
+What is Spring Boot Actuator?,Spring Boot,Medium
+What is the difference between @Component and @Service?,Spring Boot,Medium
+How does Spring Boot handle dependency injection?,Spring Boot,Hard
+What is a primary key in a database?,Database,Easy
+What is a foreign key?,Database,Easy
+What is normalization?,Database,Medium
+What is denormalization?,Database,Medium
+What is an SQL join?,Database,Easy
+What is the difference between INNER JOIN and LEFT JOIN?,Database,Medium
+What is an index in a database?,Database,Medium
+What is a transaction?,Database,Medium
+What is ACID in database systems?,Database,Hard
+How do you optimize a slow SQL query?,Database,Hard
+What is an array?,DSA,Easy
+What is a linked list?,DSA,Easy
+What is a stack?,DSA,Easy
+What is a queue?,DSA,Easy
+What is binary search?,DSA,Easy
+What is the time complexity of binary search?,DSA,Medium
+What is a binary tree?,DSA,Easy
+What is a graph?,DSA,Easy
+What is dynamic programming?,DSA,Hard
+How would you detect a cycle in a linked list?,DSA,Hard
+Tell me about yourself,HR,Easy
+Why do you want to join our company?,HR,Easy
+What are your strengths?,HR,Easy
+What are your weaknesses?,HR,Easy
+Why should we hire you?,HR,Easy
+Where do you see yourself in five years?,HR,Easy
+Tell me about a challenging project you worked on,HR,Medium
+How do you handle pressure?,HR,Medium
+How do you handle conflict with a team member?,HR,Medium
+Why did you choose software development as a career?,HR,Easy
