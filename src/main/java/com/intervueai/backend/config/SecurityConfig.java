@@ -90,6 +90,13 @@ public class SecurityConfig {
                         ).authenticated()
 
                         // -------------------------
+                        // AI Interview APIs
+                        // -------------------------
+                        .requestMatchers(
+                                "/api/ai/**"
+                        ).authenticated()
+
+                        // -------------------------
                         // Everything else
                         // -------------------------
                         .anyRequest().authenticated()
