@@ -6,6 +6,8 @@ import com.intervueai.backend.user.entity.User;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "interviews")
@@ -40,6 +42,15 @@ public class Interview {
 
     // Interview end time
     private LocalDateTime endedAt;
+
+    // Questions belonging to this interview
+    @OneToMany(
+            mappedBy = "interview",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    @OrderBy("questionNumber ASC")
+    private List<InterviewQuestion> questions = new ArrayList<>();
 
     public Interview() {
     }
@@ -88,6 +99,10 @@ public class Interview {
         return endedAt;
     }
 
+    public List<InterviewQuestion> getQuestions() {
+        return questions;
+    }
+
     public void setId(Long id) {
         this.id = id;
     }
@@ -114,5 +129,19 @@ public class Interview {
 
     public void setEndedAt(LocalDateTime endedAt) {
         this.endedAt = endedAt;
+    }
+
+    public void setQuestions(List<InterviewQuestion> questions) {
+        this.questions = questions;
+    }
+
+    public void addQuestion(InterviewQuestion question) {
+        questions.add(question);
+        question.setInterview(this);
+    }
+
+    public void removeQuestion(InterviewQuestion question) {
+        questions.remove(question);
+        question.setInterview(null);
     }
 }

@@ -1,6 +1,7 @@
 package com.intervueai.backend.interview.controller;
 
 import com.intervueai.backend.interview.dto.CreateInterviewRequest;
+import com.intervueai.backend.interview.dto.InterviewQuestionResponse;
 import com.intervueai.backend.interview.dto.InterviewResponse;
 import com.intervueai.backend.interview.service.InterviewService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,59 +20,73 @@ public class InterviewController {
 
     private final InterviewService interviewService;
 
-    public InterviewController(InterviewService interviewService) {
+    public InterviewController(
+            InterviewService interviewService
+    ) {
         this.interviewService = interviewService;
     }
 
     @Operation(
             summary = "Create Interview",
-            description = "Creates a new interview session using the logged-in user's selected resume and job."
+            description = "Creates a new interview for the logged-in user."
     )
     @PostMapping
     public ResponseEntity<InterviewResponse> createInterview(
             @Valid @RequestBody CreateInterviewRequest request,
             Authentication authentication
     ) {
-
-        String email = authentication.getName();
-
-        InterviewResponse response =
-                interviewService.createInterview(email, request);
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                interviewService.createInterview(
+                        authentication.getName(),
+                        request
+                )
+        );
     }
 
     @Operation(
             summary = "Get My Interviews",
-            description = "Returns all interview sessions belonging to the logged-in user."
+            description = "Returns all interviews belonging to the logged-in user."
     )
     @GetMapping
     public ResponseEntity<List<InterviewResponse>> getMyInterviews(
             Authentication authentication
     ) {
-
-        String email = authentication.getName();
-
         return ResponseEntity.ok(
-                interviewService.getMyInterviews(email)
+                interviewService.getMyInterviews(
+                        authentication.getName()
+                )
         );
     }
 
     @Operation(
-            summary = "Get My Interview",
-            description = "Returns one interview session belonging to the logged-in user."
+            summary = "Get Interview",
+            description = "Returns a specific interview belonging to the logged-in user."
     )
     @GetMapping("/{interviewId}")
     public ResponseEntity<InterviewResponse> getMyInterview(
             @PathVariable Long interviewId,
             Authentication authentication
     ) {
-
-        String email = authentication.getName();
-
         return ResponseEntity.ok(
                 interviewService.getMyInterview(
-                        email,
+                        authentication.getName(),
+                        interviewId
+                )
+        );
+    }
+
+    @Operation(
+            summary = "Get Interview Questions",
+            description = "Returns all questions and candidate answers for an interview."
+    )
+    @GetMapping("/{interviewId}/questions")
+    public ResponseEntity<List<InterviewQuestionResponse>> getInterviewQuestions(
+            @PathVariable Long interviewId,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(
+                interviewService.getInterviewQuestions(
+                        authentication.getName(),
                         interviewId
                 )
         );
@@ -79,19 +94,16 @@ public class InterviewController {
 
     @Operation(
             summary = "Complete Interview",
-            description = "Marks the selected interview session as completed."
+            description = "Marks the interview as completed."
     )
     @PutMapping("/{interviewId}/complete")
     public ResponseEntity<InterviewResponse> completeInterview(
             @PathVariable Long interviewId,
             Authentication authentication
     ) {
-
-        String email = authentication.getName();
-
         return ResponseEntity.ok(
                 interviewService.completeInterview(
-                        email,
+                        authentication.getName(),
                         interviewId
                 )
         );

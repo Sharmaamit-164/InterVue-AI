@@ -1,8 +1,11 @@
 package com.intervueai.backend.interview.service;
 
 import com.intervueai.backend.interview.dto.CreateInterviewRequest;
+import com.intervueai.backend.interview.dto.InterviewQuestionResponse;
 import com.intervueai.backend.interview.dto.InterviewResponse;
 import com.intervueai.backend.interview.entity.Interview;
+import com.intervueai.backend.interview.entity.InterviewQuestion;
+import com.intervueai.backend.interview.repository.InterviewQuestionRepository;
 import com.intervueai.backend.interview.repository.InterviewRepository;
 import com.intervueai.backend.job.entity.Job;
 import com.intervueai.backend.job.repository.JobRepository;
@@ -20,17 +23,20 @@ import java.util.List;
 public class InterviewServiceImpl implements InterviewService {
 
     private final InterviewRepository interviewRepository;
+    private final InterviewQuestionRepository interviewQuestionRepository;
     private final UserRepository userRepository;
     private final ResumeRepository resumeRepository;
     private final JobRepository jobRepository;
 
     public InterviewServiceImpl(
             InterviewRepository interviewRepository,
+            InterviewQuestionRepository interviewQuestionRepository,
             UserRepository userRepository,
             ResumeRepository resumeRepository,
             JobRepository jobRepository
     ) {
         this.interviewRepository = interviewRepository;
+        this.interviewQuestionRepository = interviewQuestionRepository;
         this.userRepository = userRepository;
         this.resumeRepository = resumeRepository;
         this.jobRepository = jobRepository;
@@ -131,6 +137,30 @@ public class InterviewServiceImpl implements InterviewService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<InterviewQuestionResponse> getInterviewQuestions(
+            String email,
+            Long interviewId
+    ) {
+
+        User user = findUser(email);
+
+        Interview interview = interviewRepository
+                .findByIdAndUser(interviewId, user)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Interview not found for the logged-in user"
+                        )
+                );
+
+        return interviewQuestionRepository
+                .findByInterviewOrderByQuestionNumberAsc(interview)
+                .stream()
+                .map(this::convertToQuestionResponse)
+                .toList();
+    }
+
+    @Override
     @Transactional
     public InterviewResponse completeInterview(
             String email,
@@ -180,6 +210,21 @@ public class InterviewServiceImpl implements InterviewService {
                 interview.getStatus(),
                 interview.getStartedAt(),
                 interview.getEndedAt()
+        );
+    }
+
+    private InterviewQuestionResponse convertToQuestionResponse(
+            InterviewQuestion question
+    ) {
+
+        return new InterviewQuestionResponse(
+                question.getId(),
+                question.getInterview().getId(),
+                question.getQuestionNumber(),
+                question.getQuestion(),
+                question.getCandidateAnswer(),
+                question.getAskedAt(),
+                question.getAnsweredAt()
         );
     }
 }

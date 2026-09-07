@@ -1,7 +1,9 @@
 package com.intervueai.backend.ai.interview;
 
+import com.intervueai.backend.interview.dto.CandidateAnswerRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -13,9 +15,17 @@ public class AIInterviewController {
 
     private final AIInterviewService aiInterviewService;
 
-    public AIInterviewController(AIInterviewService aiInterviewService) {
+    public AIInterviewController(
+            AIInterviewService aiInterviewService
+    ) {
         this.aiInterviewService = aiInterviewService;
     }
+
+    /*
+     * ============================================================
+     * EXISTING STANDALONE AI ENDPOINTS
+     * ============================================================
+     */
 
     @Operation(
             summary = "Generate First AI Interview Question",
@@ -30,11 +40,12 @@ public class AIInterviewController {
 
         String email = authentication.getName();
 
-        String question = aiInterviewService.generateFirstQuestion(
-                email,
-                resumeId,
-                jobId
-        );
+        String question =
+                aiInterviewService.generateFirstQuestion(
+                        email,
+                        resumeId,
+                        jobId
+                );
 
         return ResponseEntity.ok(question);
     }
@@ -47,19 +58,73 @@ public class AIInterviewController {
     public ResponseEntity<String> generateNextQuestion(
             @RequestParam Long resumeId,
             @RequestParam Long jobId,
-            @RequestParam(required = false, defaultValue = "") String previousConversation,
+            @RequestParam(
+                    required = false,
+                    defaultValue = ""
+            ) String previousConversation,
             Authentication authentication
     ) {
 
         String email = authentication.getName();
 
-        String question = aiInterviewService.generateNextQuestion(
-                email,
-                resumeId,
-                jobId,
-                previousConversation
-        );
+        String question =
+                aiInterviewService.generateNextQuestion(
+                        email,
+                        resumeId,
+                        jobId,
+                        previousConversation
+                );
 
         return ResponseEntity.ok(question);
+    }
+
+    /*
+     * ============================================================
+     * ACTUAL INTERVIEW ENDPOINTS
+     * ============================================================
+     */
+
+    @Operation(
+            summary = "Generate First Question For Interview",
+            description = "Generates the first AI question for an existing interview and saves it in the database."
+    )
+    @PostMapping("/{interviewId}/first-question")
+    public ResponseEntity<String> generateFirstQuestionForInterview(
+            @PathVariable Long interviewId,
+            Authentication authentication
+    ) {
+
+        String email = authentication.getName();
+
+        String question =
+                aiInterviewService.generateFirstQuestionForInterview(
+                        email,
+                        interviewId
+                );
+
+        return ResponseEntity.ok(question);
+    }
+
+    @Operation(
+            summary = "Answer Current Question And Generate Next",
+            description = "Saves the candidate's answer and generates the next AI question. The interview automatically completes after question 10."
+    )
+    @PostMapping("/{interviewId}/next-question")
+    public ResponseEntity<String> generateNextQuestionForInterview(
+            @PathVariable Long interviewId,
+            @Valid @RequestBody CandidateAnswerRequest request,
+            Authentication authentication
+    ) {
+
+        String email = authentication.getName();
+
+        String result =
+                aiInterviewService.generateNextQuestionForInterview(
+                        email,
+                        interviewId,
+                        request.getCandidateAnswer()
+                );
+
+        return ResponseEntity.ok(result);
     }
 }
