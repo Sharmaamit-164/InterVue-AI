@@ -52,53 +52,60 @@ public class SecurityConfig {
                 // =========================
                 .authorizeHttpRequests(auth -> auth
 
-                        // -------------------------
+                        // =========================
                         // Authentication APIs
-                        // -------------------------
+                        // =========================
                         .requestMatchers(
                                 "/api/auth/**"
                         ).permitAll()
 
-                        // -------------------------
+                        // =========================
                         // Swagger / OpenAPI
-                        // -------------------------
+                        // =========================
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // -------------------------
+                        // =========================
                         // Resume APIs
-                        // -------------------------
+                        // =========================
                         .requestMatchers(
                                 "/api/resumes/**"
                         ).authenticated()
 
-                        // -------------------------
+                        // =========================
                         // Job APIs
-                        // -------------------------
+                        // =========================
                         .requestMatchers(
                                 "/api/jobs/**"
                         ).authenticated()
 
-                        // -------------------------
+                        // =========================
                         // User APIs
-                        // -------------------------
+                        // =========================
                         .requestMatchers(
                                 "/api/users/**"
                         ).authenticated()
 
-                        // -------------------------
+                        // =========================
                         // AI Interview APIs
-                        // -------------------------
+                        // =========================
                         .requestMatchers(
                                 "/api/ai/**"
                         ).authenticated()
 
-                        // -------------------------
+                        // =========================
+                        // Evaluation APIs
+                        // =========================
+                        .requestMatchers(
+                                "/api/evaluations/**"
+                        ).authenticated()
+
+                        // =========================
                         // Everything else
-                        // -------------------------
+                        // =========================
                         .anyRequest().authenticated()
                 )
 
