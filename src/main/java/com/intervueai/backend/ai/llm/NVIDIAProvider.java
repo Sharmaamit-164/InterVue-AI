@@ -1,6 +1,5 @@
 package com.intervueai.backend.ai.llm;
 
-import com.intervueai.backend.ai.llm.LLMProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
@@ -51,21 +50,29 @@ public class NVIDIAProvider implements LLMProvider {
                                 "role", "system",
                                 "content",
                                 """
-                                You are a professional technical interviewer.
+                                You are an AI interview evaluator.
 
-                                Return ONLY ONE interview question.
+                                Your task is to evaluate the candidate's answer
+                                to the interview question.
 
-                                Do not provide reasoning.
-                                Do not provide analysis.
-                                Do not provide a thinking process.
-                                Do not provide an answer.
-                                Do not provide explanations.
-                                Do not use headings.
-                                Do not use bullet points.
-                                Do not use numbering.
-                                Do not ask multiple questions.
-
-                                Start directly with the interview question.
+                                IMPORTANT:
+                                - Return ONLY valid JSON.
+                                - Do NOT use Markdown.
+                                - Do NOT use code fences.
+                                - Do NOT provide explanations outside JSON.
+                                - Do NOT truncate the response.
+                                - All score values must be integers from 0 to 10.
+                                - recommendation must be exactly one of:
+                                  STRONG_HIRE, HIRE, CONSIDER, NO_HIRE.
+                                - Return exactly these JSON fields:
+                                  overallScore
+                                  technicalScore
+                                  communicationScore
+                                  problemSolvingScore
+                                  recommendation
+                                  strengths
+                                  weaknesses
+                                  feedback
                                 """
                         ),
 
@@ -77,13 +84,17 @@ public class NVIDIAProvider implements LLMProvider {
 
                 "temperature", 0.2,
 
-                "max_tokens", 150,
+                /*
+                 * Evaluation responses contain detailed feedback.
+                 * 150 tokens was too small and caused NVIDIA to
+                 * return incomplete JSON.
+                 */
+                "max_tokens", 800,
 
                 /*
-                 * IMPORTANT:
-                 * Nemotron 3.5 Lightning is a reasoning model.
-                 * Disable thinking so the complete token budget
-                 * is used for the actual interview question.
+                 * Nemotron reasoning models can consume tokens
+                 * for internal thinking. Disable thinking so the
+                 * available output budget is used for the JSON.
                  */
                 "chat_template_kwargs",
                 Map.of(
@@ -141,63 +152,6 @@ public class NVIDIAProvider implements LLMProvider {
             );
         }
 
-        return cleanQuestion(content);
-    }
-
-    private String cleanQuestion(String content) {
-
-        /*
-         * Remove accidental markdown formatting.
-         */
-        content = content
-                .replace("```", "")
-                .trim();
-
-        /*
-         * Remove common numbering.
-         */
-        content = content
-                .replaceFirst("^\\d+[.)]\\s*", "")
-                .trim();
-
-        /*
-         * Remove bullet points.
-         */
-        content = content
-                .replaceFirst("^[*-]\\s*", "")
-                .trim();
-
-        /*
-         * If the model somehow returned additional text
-         * before the actual question, extract the question.
-         */
-        int questionMark = content.indexOf('?');
-
-        if (questionMark >= 0) {
-
-            String question = content
-                    .substring(0, questionMark + 1)
-                    .trim();
-
-            /*
-             * If there is obvious prefix text, remove it.
-             */
-            int lastNewLine = question.lastIndexOf("\n");
-
-            if (lastNewLine >= 0) {
-                String lastLine = question
-                        .substring(lastNewLine + 1)
-                        .trim();
-
-                if (!lastLine.isBlank()) {
-                    question = lastLine;
-                }
-            }
-
-            return question;
-        }
-
         return content;
     }
 }
-

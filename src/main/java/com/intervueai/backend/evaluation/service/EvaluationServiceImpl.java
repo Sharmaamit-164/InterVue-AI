@@ -1,5 +1,8 @@
 package com.intervueai.backend.evaluation.service;
 
+import com.intervueai.backend.ai.evaluation.AIEvaluationService;
+
+import com.intervueai.backend.evaluation.dto.AIEvaluationResponse;
 import com.intervueai.backend.evaluation.dto.EvaluationResponse;
 import com.intervueai.backend.evaluation.entity.Evaluation;
 import com.intervueai.backend.evaluation.repository.EvaluationRepository;
@@ -22,17 +25,20 @@ public class EvaluationServiceImpl implements EvaluationService {
     private final InterviewRepository interviewRepository;
     private final InterviewQuestionRepository interviewQuestionRepository;
     private final UserRepository userRepository;
+    private final AIEvaluationService aiEvaluationService;
 
     public EvaluationServiceImpl(
             EvaluationRepository evaluationRepository,
             InterviewRepository interviewRepository,
             InterviewQuestionRepository interviewQuestionRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            AIEvaluationService aiEvaluationService
     ) {
         this.evaluationRepository = evaluationRepository;
         this.interviewRepository = interviewRepository;
         this.interviewQuestionRepository = interviewQuestionRepository;
         this.userRepository = userRepository;
+        this.aiEvaluationService = aiEvaluationService;
     }
 
     @Override
@@ -41,6 +47,7 @@ public class EvaluationServiceImpl implements EvaluationService {
             String email,
             Long interviewId
     ) {
+
         User user = findUser(email);
 
         Interview interview = interviewRepository
@@ -73,57 +80,108 @@ public class EvaluationServiceImpl implements EvaluationService {
             );
         }
 
-        /*
-         * Initial evaluation logic.
-         *
-         * The actual AI evaluation will be connected later.
-         * For now, we calculate a basic score from answered questions.
-         */
+        int evaluatedQuestions = 0;
 
-        long answeredQuestions = questions.stream()
-                .filter(question ->
-                        question.getCandidateAnswer() != null
-                                && !question.getCandidateAnswer().isBlank()
-                )
-                .count();
+        int totalOverallScore = 0;
+        int totalTechnicalScore = 0;
+        int totalCommunicationScore = 0;
+        int totalProblemSolvingScore = 0;
 
-        int overallScore = (int) Math.round(
-                (answeredQuestions * 100.0) / questions.size()
+        StringBuilder strengths = new StringBuilder();
+        StringBuilder weaknesses = new StringBuilder();
+        StringBuilder feedback = new StringBuilder();
+
+        for (InterviewQuestion question : questions) {
+
+            String candidateAnswer = question.getCandidateAnswer();
+
+            if (candidateAnswer == null || candidateAnswer.isBlank()) {
+                continue;
+            }
+
+            AIEvaluationResponse aiEvaluation =
+                    aiEvaluationService.evaluate(
+                            question.getQuestion(),
+                            candidateAnswer
+                    );
+
+            evaluatedQuestions++;
+
+            totalOverallScore += aiEvaluation.getOverallScore();
+            totalTechnicalScore += aiEvaluation.getTechnicalScore();
+            totalCommunicationScore += aiEvaluation.getCommunicationScore();
+            totalProblemSolvingScore +=
+                    aiEvaluation.getProblemSolvingScore();
+
+            strengths.append("Question ")
+                    .append(question.getQuestionNumber())
+                    .append(": ")
+                    .append(aiEvaluation.getStrengths())
+                    .append("\n\n");
+
+            weaknesses.append("Question ")
+                    .append(question.getQuestionNumber())
+                    .append(": ")
+                    .append(aiEvaluation.getWeaknesses())
+                    .append("\n\n");
+
+            feedback.append("Question ")
+                    .append(question.getQuestionNumber())
+                    .append(":\n")
+                    .append(aiEvaluation.getFeedback())
+                    .append("\n\n");
+        }
+
+        if (evaluatedQuestions == 0) {
+            throw new RuntimeException(
+                    "No answered questions found for AI evaluation"
+            );
+        }
+
+        int overallScore = calculateAverage(
+                totalOverallScore,
+                evaluatedQuestions
         );
+
+        int technicalScore = calculateAverage(
+                totalTechnicalScore,
+                evaluatedQuestions
+        );
+
+        int communicationScore = calculateAverage(
+                totalCommunicationScore,
+                evaluatedQuestions
+        );
+
+        int problemSolvingScore = calculateAverage(
+                totalProblemSolvingScore,
+                evaluatedQuestions
+        );
+
+        String recommendation =
+                generateRecommendation(overallScore);
 
         Evaluation evaluation = new Evaluation();
 
         evaluation.setInterview(interview);
-        evaluation.setOverallScore(overallScore);
-        evaluation.setTechnicalScore(overallScore);
-        evaluation.setCommunicationScore(overallScore);
-        evaluation.setProblemSolvingScore(overallScore);
 
-        if (overallScore >= 80) {
-            evaluation.setRecommendation("STRONG_HIRE");
-        } else if (overallScore >= 65) {
-            evaluation.setRecommendation("HIRE");
-        } else if (overallScore >= 50) {
-            evaluation.setRecommendation("CONSIDER");
-        } else {
-            evaluation.setRecommendation("NO_HIRE");
-        }
+        evaluation.setOverallScore(overallScore);
+        evaluation.setTechnicalScore(technicalScore);
+        evaluation.setCommunicationScore(communicationScore);
+        evaluation.setProblemSolvingScore(problemSolvingScore);
+
+        evaluation.setRecommendation(recommendation);
 
         evaluation.setStrengths(
-                "Candidate answered "
-                        + answeredQuestions
-                        + " out of "
-                        + questions.size()
-                        + " questions."
+                strengths.toString().trim()
         );
 
         evaluation.setWeaknesses(
-                "Detailed AI-based weakness analysis will be added."
+                weaknesses.toString().trim()
         );
 
         evaluation.setFeedback(
-                "Initial interview evaluation generated successfully. "
-                        + "AI-based detailed evaluation will be connected next."
+                feedback.toString().trim()
         );
 
         evaluation.setUpdatedAt(LocalDateTime.now());
@@ -140,6 +198,7 @@ public class EvaluationServiceImpl implements EvaluationService {
             String email,
             Long interviewId
     ) {
+
         User user = findUser(email);
 
         Interview interview = interviewRepository
@@ -158,6 +217,7 @@ public class EvaluationServiceImpl implements EvaluationService {
     }
 
     private User findUser(String email) {
+
         return userRepository
                 .findByEmail(email)
                 .orElseThrow(() -> new RuntimeException(
@@ -165,9 +225,39 @@ public class EvaluationServiceImpl implements EvaluationService {
                 ));
     }
 
+    private int calculateAverage(
+            int total,
+            int count
+    ) {
+
+        return (int) Math.round(
+                (double) total / count
+        );
+    }
+
+    private String generateRecommendation(
+            int overallScore
+    ) {
+
+        if (overallScore >= 8) {
+            return "STRONG_HIRE";
+        }
+
+        if (overallScore >= 6) {
+            return "HIRE";
+        }
+
+        if (overallScore >= 4) {
+            return "CONSIDER";
+        }
+
+        return "NO_HIRE";
+    }
+
     private EvaluationResponse convertToResponse(
             Evaluation evaluation
     ) {
+
         return new EvaluationResponse(
                 evaluation.getId(),
                 evaluation.getInterview().getId(),
@@ -184,3 +274,4 @@ public class EvaluationServiceImpl implements EvaluationService {
         );
     }
 }
+
