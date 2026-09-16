@@ -177,45 +177,42 @@ public class AIInterviewServiceImpl implements AIInterviewService {
             );
         }
 
-        Resume resume = interview.getResume();
-        Job job = interview.getJob();
-
-        String resumeText = resume.getParsedText();
-
-        if (resumeText == null || resumeText.isBlank()) {
-            throw new IllegalArgumentException(
-                    "The selected resume does not contain parsed text"
-            );
-        }
-
-        String prompt = buildFirstQuestionPrompt(
-                resumeText,
-                job
-        );
+        /*
+         * ========================================================
+         * FIRST INTERVIEW QUESTION
+         * ========================================================
+         *
+         * The interview always starts with a self-introduction.
+         * We do NOT ask NVIDIA to generate this question.
+         */
 
         String generatedQuestion =
-                llmService.generateResponse(prompt);
-
-        if (generatedQuestion == null ||
-                generatedQuestion.isBlank()) {
-
-            throw new RuntimeException(
-                    "AI failed to generate the first interview question"
-            );
-        }
+                "Tell me about yourself.";
 
         InterviewQuestion question =
                 new InterviewQuestion();
 
         question.setInterview(interview);
         question.setQuestionNumber(1);
-        question.setQuestion(generatedQuestion.trim());
-        question.setAskedAt(LocalDateTime.now());
+
+        question.setQuestion(
+                generatedQuestion
+        );
+
+        question.setAskedAt(
+                LocalDateTime.now()
+        );
 
         interviewQuestionRepository.save(question);
 
         return question.getQuestion();
     }
+
+    /*
+     * ============================================================
+     * NEXT INTERVIEW QUESTION
+     * ============================================================
+     */
 
     @Override
     @Transactional
@@ -249,6 +246,9 @@ public class AIInterviewServiceImpl implements AIInterviewService {
             );
         }
 
+        /*
+         * Get all questions belonging to this interview.
+         */
         List<InterviewQuestion> questions =
                 interviewQuestionRepository
                         .findByInterviewOrderByQuestionNumberAsc(
@@ -261,12 +261,15 @@ public class AIInterviewServiceImpl implements AIInterviewService {
             );
         }
 
+        /*
+         * The latest question is the question
+         * that the candidate is answering now.
+         */
         InterviewQuestion currentQuestion =
                 questions.get(questions.size() - 1);
 
         /*
-         * Make sure the previous question has not already
-         * been answered.
+         * Prevent answering the same question twice.
          */
         if (currentQuestion.getCandidateAnswer() != null &&
                 !currentQuestion.getCandidateAnswer().isBlank()) {
@@ -277,8 +280,11 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         }
 
         /*
-         * Save candidate answer.
+         * ========================================================
+         * SAVE CANDIDATE ANSWER
+         * ========================================================
          */
+
         currentQuestion.setCandidateAnswer(
                 candidateAnswer.trim()
         );
@@ -290,9 +296,91 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         interviewQuestionRepository.save(currentQuestion);
 
         /*
-         * If this was question 10, the interview is complete.
-         * DO NOT generate question 11.
+         * ========================================================
+         * INTRODUCTION COMPLETED
+         * ========================================================
+         *
+         * Question 1 is:
+         *
+         * "Tell me about yourself."
+         *
+         * After the candidate answers it, we don't immediately
+         * ask another random question.
+         *
+         * We first give a natural interviewer transition.
          */
+
+        if (currentQuestion.getQuestionNumber() == 1) {
+
+            Resume resume = interview.getResume();
+            Job job = interview.getJob();
+
+            String resumeText = resume.getParsedText();
+
+            if (resumeText == null || resumeText.isBlank()) {
+                throw new IllegalArgumentException(
+                        "The selected resume does not contain parsed text"
+                );
+            }
+
+            String conversation =
+                    buildConversation(questions);
+
+            String prompt = buildNextQuestionPrompt(
+                    resumeText,
+                    job,
+                    conversation
+            );
+
+            String generatedQuestion =
+                    llmService.generateResponse(prompt);
+
+            if (generatedQuestion == null ||
+                    generatedQuestion.isBlank()) {
+
+                throw new RuntimeException(
+                        "AI failed to generate the first technical interview question"
+                );
+            }
+
+            int nextQuestionNumber = 2;
+
+            InterviewQuestion nextQuestion =
+                    new InterviewQuestion();
+
+            nextQuestion.setInterview(interview);
+
+            nextQuestion.setQuestionNumber(
+                    nextQuestionNumber
+            );
+
+            nextQuestion.setQuestion(
+                    generatedQuestion.trim()
+            );
+
+            nextQuestion.setAskedAt(
+                    LocalDateTime.now()
+            );
+
+            interviewQuestionRepository.save(
+                    nextQuestion
+            );
+
+            return
+                    "Okay, thank you. Now I will ask you some technical questions."
+                            + "\n\n"
+                            + generatedQuestion.trim();
+        }
+
+        /*
+         * ========================================================
+         * TECHNICAL QUESTIONS
+         * ========================================================
+         *
+         * Question 2 onwards follows the normal technical
+         * interview flow.
+         */
+
         if (currentQuestion.getQuestionNumber() >= MAX_QUESTIONS) {
 
             interview.setStatus("COMPLETED");
@@ -303,12 +391,12 @@ public class AIInterviewServiceImpl implements AIInterviewService {
 
             interviewRepository.save(interview);
 
-            return "INTERVIEW_COMPLETED";
+            return "Thank you. That completes your interview.";
         }
 
         /*
-         * Build conversation from all stored questions
-         * and answers.
+         * Build the complete conversation so the LLM can
+         * understand what has already been discussed.
          */
         String conversation =
                 buildConversation(questions);
@@ -348,19 +436,78 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 new InterviewQuestion();
 
         nextQuestion.setInterview(interview);
+
         nextQuestion.setQuestionNumber(
                 nextQuestionNumber
         );
+
         nextQuestion.setQuestion(
                 generatedQuestion.trim()
         );
+
         nextQuestion.setAskedAt(
                 LocalDateTime.now()
         );
 
-        interviewQuestionRepository.save(nextQuestion);
+        interviewQuestionRepository.save(
+                nextQuestion
+        );
 
-        return nextQuestion.getQuestion();
+        /*
+         * ========================================================
+         * NATURAL INTERVIEW TRANSITION
+         * ========================================================
+         */
+
+        String transitionMessage =
+                getTransitionMessage(
+                        currentQuestion.getQuestionNumber()
+                );
+
+        return transitionMessage
+                + "\n\n"
+                + generatedQuestion.trim();
+    }
+
+    /*
+     * ============================================================
+     * INTERVIEWER TRANSITION MESSAGES
+     * ============================================================
+     */
+
+    private String getTransitionMessage(
+            int questionNumber
+    ) {
+
+        return switch (questionNumber) {
+
+            case 2 ->
+                    "Hmm, okay. Let's move to the next question.";
+
+            case 3 ->
+                    "Alright, thank you. Let's continue with the next question.";
+
+            case 4 ->
+                    "Okay, good. Let's move on to the next question.";
+
+            case 5 ->
+                    "Alright. Let's explore another technical topic.";
+
+            case 6 ->
+                    "Hmm, okay. Let's continue.";
+
+            case 7 ->
+                    "Thank you. Let's move to the next question.";
+
+            case 8 ->
+                    "Alright, let's keep going with another question.";
+
+            case 9 ->
+                    "Okay, one more technical question.";
+
+            default ->
+                    "Alright, let's move to the next question.";
+        };
     }
 
     /*
@@ -421,6 +568,10 @@ public class AIInterviewServiceImpl implements AIInterviewService {
      * ============================================================
      * FIRST QUESTION PROMPT
      * ============================================================
+     *
+     * This is kept for the standalone AI endpoint.
+     * The actual interview flow now uses the fixed
+     * "Tell me about yourself." question.
      */
 
     private String buildFirstQuestionPrompt(
@@ -431,22 +582,42 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         return """
                 TASK: Generate the first question of a technical job interview.
 
-                OUTPUT REQUIREMENT:
-                Return ONLY ONE interview question.
-                Start directly with the question.
-                End with "?".
+                STRICT QUESTION FORMAT:
+                - Return ONLY ONE question.
+                - Keep the question SHORT and DIRECT.
+                - Prefer 5 to 12 words.
+                - Never exceed 15 words.
+                - Use ONE sentence only.
+                - Ask about ONE concept only.
+                - Use simple conversational interview language.
+                - Start directly with the question.
+                - End with "?".
 
-                DO NOT:
-                - provide reasoning
-                - provide analysis
-                - provide a thinking process
-                - provide an answer
-                - provide explanations
-                - provide headings
-                - provide bullet points
-                - provide numbering
-                - ask more than one question
-                - mention AI
+                GOOD EXAMPLES:
+                What is Spring Boot?
+                What is dependency injection?
+                What is JPA?
+                What is optimistic locking?
+                How does JWT authentication work?
+                What is the difference between JPA and JDBC?
+
+                AVOID:
+                - long questions
+                - multi-part questions
+                - multiple questions
+                - long scenarios
+                - hypothetical situations
+                - explanations
+                - reasoning
+                - analysis
+                - headings
+                - bullet points
+                - numbering
+                - answers
+                - mentioning AI
+
+                The question should be relevant to the candidate's
+                resume and the target job.
 
                 Candidate Resume:
                 %s
@@ -463,8 +634,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 Required Skills:
                 %s
 
-                Ask one relevant question based on the candidate's resume
-                and the target job.
+                Generate one short interview question now.
                 """.formatted(
                 resumeText,
                 job.getTitle(),
@@ -489,23 +659,43 @@ public class AIInterviewServiceImpl implements AIInterviewService {
         return """
                 TASK: Continue a technical job interview.
 
-                OUTPUT REQUIREMENT:
-                Return ONLY ONE interview question.
-                Start directly with the question.
-                End with "?".
+                STRICT QUESTION FORMAT:
+                - Return ONLY ONE question.
+                - Keep the question SHORT and DIRECT.
+                - Prefer 5 to 12 words.
+                - Never exceed 15 words.
+                - Use ONE sentence only.
+                - Ask about ONE concept only.
+                - Use simple conversational interview language.
+                - Start directly with the question.
+                - End with "?".
 
-                DO NOT:
-                - provide reasoning
-                - provide analysis
-                - provide a thinking process
-                - provide an answer
-                - provide explanations
-                - provide headings
-                - provide bullet points
-                - provide numbering
-                - ask more than one question
-                - repeat a previous question
-                - mention AI
+                GOOD EXAMPLES:
+                What is Spring Boot?
+                What is dependency injection?
+                What is JPA?
+                What is optimistic locking?
+                How does JWT authentication work?
+                What is the difference between JPA and JDBC?
+
+                AVOID:
+                - long questions
+                - multi-part questions
+                - multiple questions
+                - long scenarios
+                - hypothetical situations
+                - explanations
+                - reasoning
+                - analysis
+                - headings
+                - bullet points
+                - numbering
+                - answers
+                - mentioning AI
+                - repeating a previous question
+
+                The next question should be relevant to the
+                resume, target job, and previous conversation.
 
                 Candidate Resume:
                 %s
@@ -525,8 +715,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
                 Previous Conversation:
                 %s
 
-                Based on the resume, job and previous conversation,
-                ask the single best next interview question.
+                Generate one short next interview question now.
                 """.formatted(
                 resumeText,
                 job.getTitle(),
