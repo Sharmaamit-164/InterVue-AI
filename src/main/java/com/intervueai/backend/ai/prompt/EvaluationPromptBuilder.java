@@ -1,6 +1,9 @@
 package com.intervueai.backend.ai.prompt;
 
+import com.intervueai.backend.interview.entity.InterviewQuestion;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 public class EvaluationPromptBuilder {
@@ -51,5 +54,53 @@ public class EvaluationPromptBuilder {
 
                 """.formatted(question, answer);
     }
-}
 
+    public String buildBatchPrompt(List<InterviewQuestion> questions) {
+        StringBuilder transcript = new StringBuilder();
+        int count = 1;
+        for (InterviewQuestion q : questions) {
+            String answer = q.getCandidateAnswer();
+            if (answer == null || answer.isBlank()) {
+                answer = "[Candidate did not provide an answer]";
+            }
+            transcript.append("Q").append(count).append(": ").append(q.getQuestion()).append("\n");
+            transcript.append("Candidate Answer: ").append(answer).append("\n\n");
+            count++;
+        }
+
+        return """
+                You are a senior AI technical interview evaluator for a software engineering platform.
+                
+                Below is the full transcript of the interview session:
+                
+                %s
+                
+                Evaluate the candidate's overall performance across all technical questions based on:
+                1. Technical depth and accuracy
+                2. Communication clarity and articulation
+                3. Problem solving approach and logic
+                
+                IMPORTANT RULES:
+                - Return ONLY valid raw JSON object.
+                - Do NOT wrap in markdown code blocks like ```json ... ```.
+                - Do NOT write any conversational text before or after the JSON.
+                - All scores must be integer numbers from 1 to 10.
+                - recommendation MUST be exactly one of: "STRONG_HIRE", "HIRE", "CONSIDER", "NO_HIRE".
+                - strengths: concise bullet points or paragraph summarizing overall key technical strengths demonstrated.
+                - weaknesses: constructive bullet points or paragraph identifying areas for technical improvement.
+                - feedback: overall summary feedback for candidate career growth.
+                
+                Required JSON structure:
+                {
+                  "overallScore": 8,
+                  "technicalScore": 8,
+                  "communicationScore": 7,
+                  "problemSolvingScore": 8,
+                  "recommendation": "HIRE",
+                  "strengths": "Key technical strengths observed...",
+                  "weaknesses": "Areas needing improvement...",
+                  "feedback": "Comprehensive interview summary and advice..."
+                }
+                """.formatted(transcript.toString());
+    }
+}

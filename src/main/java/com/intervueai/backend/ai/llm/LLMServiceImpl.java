@@ -30,4 +30,24 @@ public class LLMServiceImpl implements LLMService {
 
         return response.trim();
     }
+
+    @Override
+    public String generateResponse(String systemPrompt, String userPrompt) {
+
+        if (userPrompt == null || userPrompt.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Prompt cannot be null or empty"
+            );
+        }
+
+        String response = llmProvider.generate(systemPrompt, userPrompt);
+
+        if (response == null || response.isBlank()) {
+            throw new RuntimeException(
+                    "LLM returned an empty response"
+            );
+        }
+
+        return response.trim();
+    }
 }

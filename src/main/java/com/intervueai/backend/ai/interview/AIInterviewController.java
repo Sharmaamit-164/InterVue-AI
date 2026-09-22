@@ -1,5 +1,6 @@
 package com.intervueai.backend.ai.interview;
 
+import com.intervueai.backend.interview.dto.AIInterviewResponse;
 import com.intervueai.backend.interview.dto.CandidateAnswerRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -89,14 +90,14 @@ public class AIInterviewController {
             description = "Generates the first AI question for an existing interview and saves it in the database."
     )
     @PostMapping("/{interviewId}/first-question")
-    public ResponseEntity<String> generateFirstQuestionForInterview(
+    public ResponseEntity<AIInterviewResponse> generateFirstQuestionForInterview(
             @PathVariable Long interviewId,
             Authentication authentication
     ) {
 
         String email = authentication.getName();
 
-        String question =
+        AIInterviewResponse question =
                 aiInterviewService.generateFirstQuestionForInterview(
                         email,
                         interviewId
@@ -110,7 +111,7 @@ public class AIInterviewController {
             description = "Saves the candidate's answer and generates the next AI question. The interview automatically completes after question 10."
     )
     @PostMapping("/{interviewId}/next-question")
-    public ResponseEntity<String> generateNextQuestionForInterview(
+    public ResponseEntity<AIInterviewResponse> generateNextQuestionForInterview(
             @PathVariable Long interviewId,
             @Valid @RequestBody CandidateAnswerRequest request,
             Authentication authentication
@@ -118,7 +119,7 @@ public class AIInterviewController {
 
         String email = authentication.getName();
 
-        String result =
+        AIInterviewResponse result =
                 aiInterviewService.generateNextQuestionForInterview(
                         email,
                         interviewId,

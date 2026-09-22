@@ -1,5 +1,7 @@
 package com.intervueai.backend.ai.interview;
 
+import com.intervueai.backend.interview.dto.AIInterviewResponse;
+
 public interface AIInterviewService {
 
     /**
@@ -47,9 +49,9 @@ public interface AIInterviewService {
      *
      * @param email logged-in user's email
      * @param interviewId interview ID
-     * @return generated and saved first question
+     * @return structured AI interview response
      */
-    String generateFirstQuestionForInterview(
+    AIInterviewResponse generateFirstQuestionForInterview(
             String email,
             Long interviewId
     );
@@ -65,9 +67,9 @@ public interface AIInterviewService {
      * @param email logged-in user's email
      * @param interviewId interview ID
      * @param candidateAnswer candidate's answer to the current question
-     * @return generated next question
+     * @return structured AI interview response
      */
-    String generateNextQuestionForInterview(
+    AIInterviewResponse generateNextQuestionForInterview(
             String email,
             Long interviewId,
             String candidateAnswer

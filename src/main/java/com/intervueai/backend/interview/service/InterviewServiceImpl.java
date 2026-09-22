@@ -92,7 +92,7 @@ public class InterviewServiceImpl implements InterviewService {
         interview.setUser(user);
         interview.setResume(resume);
         interview.setJob(job);
-        interview.setStatus("IN_PROGRESS");
+        interview.setStatus("CREATED");
         interview.setStartedAt(now);
 
         Interview savedInterview =

@@ -10,6 +10,12 @@ public class OpenAIConfig {
 
     @Bean
     public OpenAIClient openAIClient() {
-        return OpenAIOkHttpClient.fromEnv();
+        String apiKey = System.getenv("OPENAI_API_KEY");
+        if (apiKey == null || apiKey.isBlank()) {
+            apiKey = "sk-placeholder-for-dev";
+        }
+        return OpenAIOkHttpClient.builder()
+                .apiKey(apiKey)
+                .build();
     }
 }

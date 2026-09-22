@@ -3,6 +3,7 @@ package com.intervueai.backend.config;
 import com.intervueai.backend.security.JwtFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -32,6 +33,10 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
+                // =========================
+                // CORS
+                // =========================
+                .cors(Customizer.withDefaults())
 
                 // =========================
                 // CSRF
@@ -90,6 +95,13 @@ public class SecurityConfig {
                         ).authenticated()
 
                         // =========================
+                        // Interview APIs
+                        // =========================
+                        .requestMatchers(
+                                "/api/interviews/**"
+                        ).authenticated()
+
+                        // =========================
                         // AI Interview APIs
                         // =========================
                         .requestMatchers(
@@ -101,6 +113,27 @@ public class SecurityConfig {
                         // =========================
                         .requestMatchers(
                                 "/api/evaluations/**"
+                        ).authenticated()
+
+                        // =========================
+                        // Matching APIs
+                        // =========================
+                        .requestMatchers(
+                                "/api/matching/**"
+                        ).authenticated()
+
+                        // =========================
+                        // Avatar APIs
+                        // =========================
+                        .requestMatchers(
+                                "/api/avatar/**"
+                        ).authenticated()
+
+                        // =========================
+                        // Speech APIs
+                        // =========================
+                        .requestMatchers(
+                                "/api/speech/**"
                         ).authenticated()
 
                         // =========================

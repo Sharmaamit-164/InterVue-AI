@@ -1,6 +1,7 @@
 package com.intervueai.backend.ai.interview;
 
 import com.intervueai.backend.ai.llm.LLMService;
+import com.intervueai.backend.interview.dto.AIInterviewResponse;
 import com.intervueai.backend.interview.entity.Interview;
 import com.intervueai.backend.interview.entity.InterviewQuestion;
 import com.intervueai.backend.interview.repository.InterviewQuestionRepository;
@@ -147,7 +148,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
 
     @Override
     @Transactional
-    public String generateFirstQuestionForInterview(
+    public AIInterviewResponse generateFirstQuestionForInterview(
             String email,
             Long interviewId
     ) {
@@ -168,12 +169,18 @@ public class AIInterviewServiceImpl implements AIInterviewService {
             );
         }
 
-        long existingQuestionCount =
-                interviewQuestionRepository.countByInterview(interview);
+        List<InterviewQuestion> existingQuestions =
+                interviewQuestionRepository.findByInterviewOrderByQuestionNumberAsc(interview);
 
-        if (existingQuestionCount > 0) {
-            throw new IllegalStateException(
-                    "The first question has already been generated"
+        if (!existingQuestions.isEmpty()) {
+            InterviewQuestion existingQ1 = existingQuestions.get(0);
+            return new AIInterviewResponse(
+                    interview.getId(),
+                    existingQ1.getQuestionNumber(),
+                    "Hello! Welcome to your technical interview. Let's begin with a quick introduction.",
+                    existingQ1.getQuestion(),
+                    interview.getStatus(),
+                    false
             );
         }
 
@@ -205,7 +212,17 @@ public class AIInterviewServiceImpl implements AIInterviewService {
 
         interviewQuestionRepository.save(question);
 
-        return question.getQuestion();
+        interview.setStatus("IN_PROGRESS");
+        interviewRepository.save(interview);
+
+        return new AIInterviewResponse(
+                interview.getId(),
+                1,
+                "Hello! Welcome to your technical interview. Let's begin with a quick introduction.",
+                question.getQuestion(),
+                interview.getStatus(),
+                false
+        );
     }
 
     /*
@@ -216,7 +233,7 @@ public class AIInterviewServiceImpl implements AIInterviewService {
 
     @Override
     @Transactional
-    public String generateNextQuestionForInterview(
+    public AIInterviewResponse generateNextQuestionForInterview(
             String email,
             Long interviewId,
             String candidateAnswer
@@ -265,18 +282,19 @@ public class AIInterviewServiceImpl implements AIInterviewService {
          * The latest question is the question
          * that the candidate is answering now.
          */
-        InterviewQuestion currentQuestion =
-                questions.get(questions.size() - 1);
-
         /*
-         * Prevent answering the same question twice.
+         * Find the current question to answer.
+         * Prefer the earliest unanswered question, or the latest question.
          */
-        if (currentQuestion.getCandidateAnswer() != null &&
-                !currentQuestion.getCandidateAnswer().isBlank()) {
-
-            throw new IllegalStateException(
-                    "The current question has already been answered"
-            );
+        InterviewQuestion currentQuestion = null;
+        for (InterviewQuestion q : questions) {
+            if (q.getCandidateAnswer() == null || q.getCandidateAnswer().isBlank()) {
+                currentQuestion = q;
+                break;
+            }
+        }
+        if (currentQuestion == null) {
+            currentQuestion = questions.get(questions.size() - 1);
         }
 
         /*
@@ -284,189 +302,85 @@ public class AIInterviewServiceImpl implements AIInterviewService {
          * SAVE CANDIDATE ANSWER
          * ========================================================
          */
-
-        currentQuestion.setCandidateAnswer(
-                candidateAnswer.trim()
-        );
-
-        currentQuestion.setAnsweredAt(
-                LocalDateTime.now()
-        );
-
+        currentQuestion.setCandidateAnswer(candidateAnswer.trim());
+        currentQuestion.setAnsweredAt(LocalDateTime.now());
         interviewQuestionRepository.save(currentQuestion);
 
-        /*
-         * ========================================================
-         * INTRODUCTION COMPLETED
-         * ========================================================
-         *
-         * Question 1 is:
-         *
-         * "Tell me about yourself."
-         *
-         * After the candidate answers it, we don't immediately
-         * ask another random question.
-         *
-         * We first give a natural interviewer transition.
-         */
-
-        if (currentQuestion.getQuestionNumber() == 1) {
-
-            Resume resume = interview.getResume();
-            Job job = interview.getJob();
-
-            String resumeText = resume.getParsedText();
-
-            if (resumeText == null || resumeText.isBlank()) {
-                throw new IllegalArgumentException(
-                        "The selected resume does not contain parsed text"
-                );
-            }
-
-            String conversation =
-                    buildConversation(questions);
-
-            String prompt = buildNextQuestionPrompt(
-                    resumeText,
-                    job,
-                    conversation
-            );
-
-            String generatedQuestion =
-                    llmService.generateResponse(prompt);
-
-            if (generatedQuestion == null ||
-                    generatedQuestion.isBlank()) {
-
-                throw new RuntimeException(
-                        "AI failed to generate the first technical interview question"
-                );
-            }
-
-            int nextQuestionNumber = 2;
-
-            InterviewQuestion nextQuestion =
-                    new InterviewQuestion();
-
-            nextQuestion.setInterview(interview);
-
-            nextQuestion.setQuestionNumber(
-                    nextQuestionNumber
-            );
-
-            nextQuestion.setQuestion(
-                    generatedQuestion.trim()
-            );
-
-            nextQuestion.setAskedAt(
-                    LocalDateTime.now()
-            );
-
-            interviewQuestionRepository.save(
-                    nextQuestion
-            );
-
-            return
-                    "Okay, thank you. Now I will ask you some technical questions."
-                            + "\n\n"
-                            + generatedQuestion.trim();
-        }
+        int nextQuestionNumber = currentQuestion.getQuestionNumber() + 1;
 
         /*
-         * ========================================================
-         * TECHNICAL QUESTIONS
-         * ========================================================
-         *
-         * Question 2 onwards follows the normal technical
-         * interview flow.
+         * Check if interview reached maximum questions (completed)
          */
-
-        if (currentQuestion.getQuestionNumber() >= MAX_QUESTIONS) {
-
+        if (currentQuestion.getQuestionNumber() >= MAX_QUESTIONS || nextQuestionNumber > MAX_QUESTIONS) {
             interview.setStatus("COMPLETED");
-
-            interview.setEndedAt(
-                    LocalDateTime.now()
-            );
-
+            interview.setEndedAt(LocalDateTime.now());
             interviewRepository.save(interview);
 
-            return "Thank you. That completes your interview.";
+            return new AIInterviewResponse(
+                    interview.getId(),
+                    currentQuestion.getQuestionNumber(),
+                    "Thank you very much. That completes your technical interview! You can now view your comprehensive AI evaluation report.",
+                    "",
+                    "COMPLETED",
+                    true
+            );
         }
 
         /*
-         * Build the complete conversation so the LLM can
-         * understand what has already been discussed.
+         * Build the conversation history
          */
-        String conversation =
-                buildConversation(questions);
+        String conversation = buildConversation(questions);
 
         Resume resume = interview.getResume();
         Job job = interview.getJob();
 
-        String resumeText = resume.getParsedText();
-
-        if (resumeText == null || resumeText.isBlank()) {
-            throw new IllegalArgumentException(
-                    "The selected resume does not contain parsed text"
-            );
-        }
+        String resumeText = (resume != null && resume.getParsedText() != null && !resume.getParsedText().isBlank())
+                ? resume.getParsedText()
+                : "Candidate technical profile";
 
         String prompt = buildNextQuestionPrompt(
                 resumeText,
                 job,
-                conversation
+                conversation,
+                nextQuestionNumber,
+                questions
         );
 
-        String generatedQuestion =
-                llmService.generateResponse(prompt);
-
-        if (generatedQuestion == null ||
-                generatedQuestion.isBlank()) {
-
-            throw new RuntimeException(
-                    "AI failed to generate the next interview question"
-            );
+        String generatedQuestion = "";
+        try {
+            String rawQuestion = llmService.generateResponse(prompt);
+            generatedQuestion = cleanQuestion(rawQuestion);
+        } catch (Exception ignored) {
         }
 
-        int nextQuestionNumber =
-                currentQuestion.getQuestionNumber() + 1;
-
-        InterviewQuestion nextQuestion =
-                new InterviewQuestion();
-
-        nextQuestion.setInterview(interview);
-
-        nextQuestion.setQuestionNumber(
-                nextQuestionNumber
-        );
-
-        nextQuestion.setQuestion(
-                generatedQuestion.trim()
-        );
-
-        nextQuestion.setAskedAt(
-                LocalDateTime.now()
-        );
-
-        interviewQuestionRepository.save(
-                nextQuestion
-        );
-
         /*
-         * ========================================================
-         * NATURAL INTERVIEW TRANSITION
-         * ========================================================
+         * DEDUPLICATION SAFEGUARD:
+         * If the question is blank or is a duplicate of ANY question already asked,
+         * use the curated topic fallback question for this question number.
          */
+        if (generatedQuestion.isBlank() || isDuplicateQuestion(generatedQuestion, questions)) {
+            generatedQuestion = getTopicFallbackQuestion(nextQuestionNumber, job);
+        }
 
-        String transitionMessage =
-                getTransitionMessage(
-                        currentQuestion.getQuestionNumber()
-                );
+        InterviewQuestion nextQuestion = new InterviewQuestion();
+        nextQuestion.setInterview(interview);
+        nextQuestion.setQuestionNumber(nextQuestionNumber);
+        nextQuestion.setQuestion(generatedQuestion.trim());
+        nextQuestion.setAskedAt(LocalDateTime.now());
+        interviewQuestionRepository.save(nextQuestion);
 
-        return transitionMessage
-                + "\n\n"
-                + generatedQuestion.trim();
+        String transitionMessage = nextQuestionNumber == 2
+                ? "Okay, thank you. Now I will ask you some technical questions."
+                : getTransitionMessage(currentQuestion.getQuestionNumber());
+
+        return new AIInterviewResponse(
+                interview.getId(),
+                nextQuestionNumber,
+                transitionMessage,
+                generatedQuestion.trim(),
+                interview.getStatus(),
+                false
+        );
     }
 
     /*
@@ -655,74 +569,130 @@ public class AIInterviewServiceImpl implements AIInterviewService {
             Job job,
             String previousConversation
     ) {
+        return buildNextQuestionPrompt(resumeText, job, previousConversation, 2, List.of());
+    }
+
+    private String buildNextQuestionPrompt(
+            String resumeText,
+            Job job,
+            String previousConversation,
+            int nextQuestionNumber,
+            List<InterviewQuestion> existingQuestions
+    ) {
+        StringBuilder excludedList = new StringBuilder();
+        if (existingQuestions != null) {
+            for (InterviewQuestion eq : existingQuestions) {
+                if (eq.getQuestion() != null && !eq.getQuestion().isBlank()) {
+                    excludedList.append("- ").append(eq.getQuestion().trim()).append("\n");
+                }
+            }
+        }
+
+        String topicGuidance = getTopicGuidance(nextQuestionNumber);
+
+        String resumeSummary = (resumeText != null && resumeText.length() > 300)
+                ? resumeText.substring(0, 300) + "..."
+                : (resumeText != null ? resumeText : "Software candidate");
+
+        String jobDescSnippet = (job.getDescription() != null && job.getDescription().length() > 200)
+                ? job.getDescription().substring(0, 200) + "..."
+                : (job.getDescription() != null ? job.getDescription() : "");
+
+        String prevContextSnippet = (previousConversation != null && previousConversation.length() > 250)
+                ? previousConversation.substring(previousConversation.length() - 250)
+                : (previousConversation != null ? previousConversation : "Beginning of technical interview.");
 
         return """
-                TASK: Continue a technical job interview.
+                TASK: Ask Question %d of 10 for a technical interview.
 
-                STRICT QUESTION FORMAT:
-                - Return ONLY ONE question.
-                - Keep the question SHORT and DIRECT.
-                - Prefer 5 to 12 words.
-                - Never exceed 15 words.
-                - Use ONE sentence only.
-                - Ask about ONE concept only.
-                - Use simple conversational interview language.
-                - Start directly with the question.
-                - End with "?".
+                TOPIC: %s
 
-                GOOD EXAMPLES:
-                What is Spring Boot?
-                What is dependency injection?
-                What is JPA?
-                What is optimistic locking?
-                How does JWT authentication work?
-                What is the difference between JPA and JDBC?
+                RULES:
+                - Return ONLY ONE short technical question (6-12 words).
+                - End with "?". No intro, no markdown, no quotes.
+                - DO NOT ask any question from the excluded list!
 
-                AVOID:
-                - long questions
-                - multi-part questions
-                - multiple questions
-                - long scenarios
-                - hypothetical situations
-                - explanations
-                - reasoning
-                - analysis
-                - headings
-                - bullet points
-                - numbering
-                - answers
-                - mentioning AI
-                - repeating a previous question
-
-                The next question should be relevant to the
-                resume, target job, and previous conversation.
-
-                Candidate Resume:
+                EXCLUDED QUESTIONS:
                 %s
 
-                Target Job:
-                %s
+                Candidate Skills / Role: %s | Target Job: %s at %s | Required: %s
 
-                Company:
-                %s
-
-                Job Description:
-                %s
-
-                Required Skills:
-                %s
-
-                Previous Conversation:
-                %s
-
-                Generate one short next interview question now.
+                Generate single Question %d now:
                 """.formatted(
-                resumeText,
+                nextQuestionNumber,
+                topicGuidance,
+                excludedList.toString().isBlank() ? "- None" : excludedList.toString(),
+                resumeSummary,
                 job.getTitle(),
                 job.getCompanyName(),
-                job.getDescription(),
                 job.getRequiredSkills(),
-                previousConversation
+                nextQuestionNumber
         );
     }
+
+
+    private String getTopicGuidance(int questionNumber) {
+        return switch (questionNumber) {
+            case 2 -> "TOPIC: CORE PROGRAMMING & OOP. Ask about fundamental OOP concepts (polymorphism, inheritance, encapsulation), collections, memory management, or core language fundamentals relevant to the candidate's skills.";
+            case 3 -> "TOPIC: FRAMEWORK & ARCHITECTURE. Ask about application frameworks (such as Spring Boot dependency injection, bean scopes, autoconfiguration, or application configuration).";
+            case 4 -> "TOPIC: DATABASE & PERSISTENCE. Ask about database design, indexing, SQL queries, transactions (ACID properties), or JPA/Hibernate ORM.";
+            case 5 -> "TOPIC: API DESIGN & PROTOCOLS. Ask about RESTful principles, HTTP methods (GET/POST/PUT/DELETE/PATCH), status codes, or API best practices.";
+            case 6 -> "TOPIC: SECURITY & AUTHENTICATION. Ask about authentication vs authorization, JWT tokens, Spring Security filter chains, or secure password storage.";
+            case 7 -> "TOPIC: CONCURRENCY & MULTITHREADING. Ask about thread safety, synchronized blocks, executor services, connection pools, or race conditions.";
+            case 8 -> "TOPIC: TESTING & CODE QUALITY. Ask about unit testing, Mockito mocking, test coverage, or SOLID principles.";
+            case 9 -> "TOPIC: SYSTEM DESIGN & PERFORMANCE. Ask about caching strategies (e.g., Redis), handling high traffic, pagination, or database connection pooling.";
+            case 10 -> "TOPIC: TROUBLESHOOTING & REAL-WORLD SCENARIO. Ask how the candidate diagnoses and debugs a complex production issue (like high CPU, memory leaks, or slow queries).";
+            default -> "TOPIC: ADVANCED TECHNICAL CONCEPTS. Ask a focused technical question relevant to the job skills that has not been asked yet.";
+        };
+    }
+
+    private String getTopicFallbackQuestion(int questionNumber, Job job) {
+        return switch (questionNumber) {
+            case 2 -> "What is the difference between an interface and an abstract class in Java?";
+            case 3 -> "How does dependency injection work in Spring Boot?";
+            case 4 -> "What is the difference between optimistic and pessimistic locking in JPA?";
+            case 5 -> "What is the difference between PUT and PATCH in RESTful APIs?";
+            case 6 -> "How does JWT authentication work and what are its main components?";
+            case 7 -> "How do you achieve thread safety in Java concurrent applications?";
+            case 8 -> "What is the difference between a unit test and an integration test?";
+            case 9 -> "How would you design a caching strategy to handle high traffic?";
+            case 10 -> "How do you troubleshoot and diagnose a memory leak in a Java application?";
+            default -> "What are the key best practices you follow when writing clean, maintainable code?";
+        };
+    }
+
+    private String cleanQuestion(String raw) {
+        if (raw == null) return "";
+        String q = raw.trim();
+        // Remove markdown backticks and quotes
+        q = q.replaceAll("`", "");
+        if ((q.startsWith("\"") && q.endsWith("\"")) || (q.startsWith("'") && q.endsWith("'"))) {
+            q = q.substring(1, q.length() - 1).trim();
+        }
+        // Remove prefixes like "Question 3:", "Question:", "Next question:"
+        q = q.replaceAll("^(?i)(question\\s*\\d*\\s*:\\s*|next\\s*question\\s*:\\s*)", "").trim();
+        if (!q.endsWith("?")) {
+            q = q + "?";
+        }
+        return q;
+    }
+
+    private boolean isDuplicateQuestion(String question, List<InterviewQuestion> existingQuestions) {
+        if (question == null || question.isBlank() || existingQuestions == null) {
+            return true;
+        }
+        String normQ = question.toLowerCase().replaceAll("[^a-z0-9]", "");
+        for (InterviewQuestion eq : existingQuestions) {
+            if (eq.getQuestion() != null) {
+                String normExisting = eq.getQuestion().toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (normQ.equals(normExisting) ||
+                        (normQ.length() > 18 && normExisting.contains(normQ)) ||
+                        (normExisting.length() > 18 && normQ.contains(normExisting))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 }
+
