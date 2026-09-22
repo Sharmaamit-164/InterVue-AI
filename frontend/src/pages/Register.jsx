@@ -32,7 +32,17 @@ export const Register = () => {
       await register(email, password);
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed. Email may already be in use.');
+      if (err.response) {
+        if (err.response.status === 405) {
+          setError('Backend API service is not accessible at this address (HTTP 405). Please ensure the backend is running.');
+        } else {
+          setError(err.response.data?.message || `Server returned error (${err.response.status}): Registration failed.`);
+        }
+      } else if (err.request) {
+        setError('Cannot connect to backend server. Please verify the backend service is running.');
+      } else {
+        setError(err.message || 'Registration failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

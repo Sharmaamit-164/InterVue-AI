@@ -20,7 +20,19 @@ export const Login = () => {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Invalid email or password. Please try again.');
+      if (err.response) {
+        if (err.response.status === 401 || err.response.status === 403) {
+          setError(err.response.data?.message || 'Invalid email or password. Please try again.');
+        } else if (err.response.status === 405) {
+          setError('Backend API service is not accessible at this address (HTTP 405). Please ensure the backend is running.');
+        } else {
+          setError(err.response.data?.message || `Server returned error (${err.response.status}): Login failed.`);
+        }
+      } else if (err.request) {
+        setError('Cannot connect to backend server. Please verify the backend service is running.');
+      } else {
+        setError(err.message || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
